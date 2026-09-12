@@ -6,12 +6,14 @@ import { AppLayout } from './components/layout/AppLayout';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { CalendarView } from './components/calendar/CalendarView';
 import { AiGeneratorView } from './components/generator/AiGeneratorView';
-import { MediaLibraryView } from './components/media/MediaLibraryView';
-import { ScheduledPostsView } from './components/scheduler/ScheduledPostsView';
-import { SocialAccountsView } from './components/social/SocialAccountsView';
+import { BrandVoiceView } from './components/brand/BrandVoiceView';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
-import { BusinessProfileView } from './components/settings/BusinessProfileView';
+import { CompetitorAnalyticsView } from './components/analytics/CompetitorAnalyticsView';
+import { PerformancePredictionView } from './components/analytics/PerformancePredictionView';
+import { TeamView } from './components/team/TeamView';
+import { IntegrationsView } from './components/integrations/IntegrationsView';
 import { SettingsView } from './components/settings/SettingsView';
+import { PublisherLogsView } from './components/logs/PublisherLogsView';
 
 const MainAppContent: React.FC = () => {
   const { currentView } = useApp();
@@ -28,13 +30,15 @@ const MainAppContent: React.FC = () => {
     <AppLayout>
       {currentView === 'dashboard' && <DashboardOverview />}
       {currentView === 'calendar' && <CalendarView />}
-      {currentView === 'generator' && <AiGeneratorView />}
-      {currentView === 'media' && <MediaLibraryView />}
-      {currentView === 'scheduled' && <ScheduledPostsView />}
+      {(currentView === 'content' || currentView === 'generator' || currentView === 'media' || currentView === 'scheduled') && <AiGeneratorView />}
+      {currentView === 'team' && <TeamView />}
+      {currentView === 'competitors' && <CompetitorAnalyticsView />}
+      {currentView === 'predictions' && <PerformancePredictionView />}
+      {currentView === 'brand' && <BrandVoiceView />}
       {currentView === 'analytics' && <AnalyticsView />}
-      {currentView === 'profile' && <BusinessProfileView />}
-      {currentView === 'social' && <SocialAccountsView />}
+      {(currentView === 'integrations' || currentView === 'social' || currentView === 'profile') && <IntegrationsView />}
       {currentView === 'settings' && <SettingsView />}
+      {currentView === 'logs' && <PublisherLogsView />}
     </AppLayout>
   );
 };

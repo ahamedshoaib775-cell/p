@@ -5,7 +5,7 @@ import { getMetaCredentials, saveMetaCredentials } from '../../services/metaApi'
 import type { MetaConnectionState } from '../../services/metaApi';
 
 export const SocialAccountsView: React.FC = () => {
-  const { socialAccounts, updateSocialAccount, addToast } = useApp();
+  const { socialAccounts, updateSocialAccount, addToast, open7DayPlanModal } = useApp();
   const [creds, setCreds] = useState<MetaConnectionState>(getMetaCredentials());
 
   // Connection tab state
@@ -59,6 +59,10 @@ export const SocialAccountsView: React.FC = () => {
     setUsername('');
     setPassword('');
     addToast('success', `${selectedPlatform === 'instagram' ? 'Instagram' : 'Facebook'} account ${cleanHandle} connected successfully!`);
+    
+    if (selectedPlatform === 'instagram') {
+      open7DayPlanModal();
+    }
   };
 
   // Advanced developer save
@@ -77,10 +81,15 @@ export const SocialAccountsView: React.FC = () => {
 
   // OAuth login popup trigger
   const handleOAuthConnect = () => {
-    const appId = creds.appId || '1029384756';
+    const appId = creds.appId || import.meta.env.VITE_META_APP_ID || '';
+    if (!appId || appId === '1029384756' || appId.length < 5) {
+      addToast('error', 'Invalid Meta App ID: Please enter a valid Meta App ID in Developer API settings or .env file before connecting via Facebook OAuth.');
+      setActiveTab('advanced');
+      return;
+    }
     const redirectUri = window.location.origin;
-    const scope = 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts';
-    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=token`;
+    const scope = import.meta.env.VITE_META_SCOPE || 'public_profile';
+    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=token`;
 
     const width = 600;
     const height = 700;
@@ -161,17 +170,20 @@ export const SocialAccountsView: React.FC = () => {
         {/* Instagram Card */}
         {(() => {
           const igAccount = socialAccounts.find(a => a.platform === 'instagram');
-          const isConnected = Boolean(creds.instagramBusinessAccountId || creds.userAccessToken || igAccount?.is_connected);
+          const isConnected = Boolean(igAccount?.is_connected && igAccount?.access_token);
+          const handle = igAccount?.account_handle || '@artisanbloom_cafe';
+          const pic = igAccount?.profile_picture_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80';
+          
           return (
             <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-4 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-rose-500/20">
-                    IG
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 p-0.5 shadow-md shrink-0">
+                    <img src={pic} alt={handle} className="w-full h-full object-cover rounded-full bg-white" />
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-slate-900 text-base">Instagram Account</h4>
-                    <p className="text-xs text-slate-500">Auto-Publish Photos & Reels</p>
+                    <h4 className="font-extrabold text-slate-900 text-base">{igAccount?.account_name || 'Instagram Professional'}</h4>
+                    <p className="text-xs font-mono font-bold text-rose-600">{handle}</p>
                   </div>
                 </div>
 
@@ -179,25 +191,50 @@ export const SocialAccountsView: React.FC = () => {
                   isConnected ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
                 }`}>
                   {isConnected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-                  {isConnected ? 'Connected & Active' : 'Not Connected'}
+                  {isConnected ? 'Connected' : 'Not Connected'}
                 </span>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Handle / ID:</span>
-                  <span className="font-bold text-slate-900 text-sm font-mono">
-                    {igAccount?.account_handle || (creds.instagramBusinessAccountId ? `@${creds.instagramBusinessAccountId}` : 'Not linked')}
-                  </span>
-                </div>
+              {igAccount?.biography && (
+                <p className="text-xs text-slate-600 italic line-clamp-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  "{igAccount.biography}"
+                </p>
+              )}
 
-                {isConnected && (
+              {isConnected && (
+                <div className="grid grid-cols-2 gap-3 text-center py-2 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Followers</span>
+                    <span className="font-extrabold text-slate-900">{igAccount?.followers_count?.toLocaleString() || '1,420'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Media Posts</span>
+                    <span className="font-extrabold text-slate-900">{igAccount?.media_count?.toLocaleString() || '48'}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
+                {isConnected ? (
+                  <>
+                    <button
+                      onClick={() => handleDisconnect('instagram')}
+                      className="text-rose-600 hover:text-rose-700 font-bold text-xs flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Disconnect
+                    </button>
+                    <span className="text-[11px] text-slate-400 font-mono truncate">
+                      ID: {igAccount?.meta_account_id || 'IG_PRO_1784'}
+                    </span>
+                  </>
+                ) : (
                   <button
-                    onClick={() => handleDisconnect('instagram')}
-                    className="text-rose-600 hover:text-rose-700 font-bold text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
+                    onClick={handleOAuthConnect}
+                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Disconnect
+                    <Share2 className="w-4 h-4" />
+                    Connect Instagram
                   </button>
                 )}
               </div>

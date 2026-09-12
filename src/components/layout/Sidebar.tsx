@@ -5,18 +5,18 @@ import {
   LayoutDashboard,
   Calendar,
   Sparkles,
-  Image,
-  Clock,
+  Brain,
   BarChart3,
-  Building2,
-  Share2,
+  Users,
+  Eye,
+  TrendingUp,
   Settings,
   LogOut,
   X,
-  ShieldCheck,
-  Radio
+  Radio,
+  Terminal
 } from 'lucide-react';
-import { isSupabaseConfigured } from '../../services/supabase';
+import { InstagramIcon as Instagram } from '../common/InstagramIcon';
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -28,14 +28,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
 
   const navItems: { view: AppView; label: string; icon: any }[] = [
     { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { view: 'calendar', label: 'Content Calendar', icon: Calendar },
-    { view: 'generator', label: 'Create Content', icon: Sparkles },
-    { view: 'media', label: 'Media Library', icon: Image },
-    { view: 'scheduled', label: 'Scheduled Posts', icon: Clock },
-    { view: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { view: 'profile', label: 'Business Profile', icon: Building2 },
-    { view: 'social', label: 'Social Accounts', icon: Share2 },
-    { view: 'settings', label: 'Settings', icon: Settings }
+    { view: 'calendar', label: 'Weekly Calendar', icon: Calendar },
+    { view: 'content', label: '7-Day Content Plan', icon: Sparkles },
+    { view: 'team', label: 'Team Collaboration', icon: Users },
+    { view: 'competitors', label: 'Competitor Intelligence', icon: Eye },
+    { view: 'predictions', label: 'Performance Predictions', icon: TrendingUp },
+    { view: 'brand', label: 'Brand Voice Memory', icon: Brain },
+    { view: 'analytics', label: 'Analytics & Reports', icon: BarChart3 },
+    { view: 'integrations', label: 'Meta Instagram Setup', icon: Instagram },
+    { view: 'settings', label: 'Settings', icon: Settings },
+    { view: 'logs', label: 'Developer Audit Logs', icon: Terminal }
   ];
 
   const handleNavClick = (v: AppView) => {
@@ -49,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
       {mobileOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs md:hidden"
         />
       )}
 
@@ -58,22 +60,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
           mobileOpen ? 'left-0' : '-left-64 md:left-0'
         }`}
       >
-        <div>
+        <div className="overflow-y-auto flex-1">
           {/* Header Branding */}
           <div className="h-20 px-6 flex items-center justify-between border-b border-slate-800/80">
             <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => handleNavClick('dashboard')}>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
                 <Sparkles className="w-5 h-5" />
               </div>
               <span className="font-extrabold text-white text-base tracking-tight">
-                SocialPilot <span className="text-indigo-400">AI</span>
+                Social AI <span className="text-indigo-400">Pro</span>
               </span>
             </div>
 
             {mobileOpen && (
               <button
                 onClick={onCloseMobile}
-                className="md:hidden text-slate-400 hover:text-white p-1 rounded-lg"
+                className="md:hidden text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -81,16 +83,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
           </div>
 
           {/* Business Profile Badge */}
-          <div className="p-4 mx-3 my-3 bg-slate-800/60 border border-slate-700/60 rounded-xl flex items-center gap-3">
+          <div className="p-3.5 mx-3 my-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center gap-3">
             {business?.logo_url ? (
-              <img src={business.logo_url} alt="Logo" className="w-9 h-9 rounded-lg object-cover bg-slate-700" />
+              <img src={business.logo_url} alt="Logo" className="w-9 h-9 rounded-xl object-cover bg-slate-800" />
             ) : (
-              <div className="w-9 h-9 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 font-bold flex items-center justify-center text-sm">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 font-bold flex items-center justify-center text-sm">
                 {business?.business_name?.[0] || 'B'}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h4 className="text-xs font-bold text-white truncate">{business?.business_name || 'My Business'}</h4>
+              <h4 className="text-xs font-extrabold text-white truncate">{business?.business_name || 'My Business'}</h4>
               <p className="text-[11px] text-slate-400 truncate">{business?.business_category || 'General'}</p>
             </div>
           </div>
@@ -99,7 +101,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
           <nav className="px-3 py-2 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = currentView === item.view;
+              const isActive = currentView === item.view || 
+                (item.view === 'content' && currentView === 'generator') ||
+                (item.view === 'integrations' && (currentView === 'social' || currentView === 'profile'));
+
               return (
                 <button
                   key={item.view}
@@ -119,10 +124,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
         </div>
 
         {/* Footer Indicators & User Session */}
-        <div className="p-4 border-t border-slate-800/80 space-y-3">
-          {/* Status Badges */}
+        <div className="p-4 border-t border-slate-800/80 space-y-3 shrink-0">
           <div className="space-y-1.5 text-[11px]">
-            <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-800/50 text-slate-400">
+            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Radio className={`w-3 h-3 ${isSchedulerActive ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
                 Scheduler Engine
@@ -131,19 +135,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
                 {isSchedulerActive ? 'Active' : 'Paused'}
               </span>
             </div>
-
-            <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-800/50 text-slate-400">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3 h-3 text-indigo-400" />
-                Backend Mode
-              </span>
-              <span className="font-semibold text-slate-300">
-                {isSupabaseConfigured() ? 'Supabase DB' : 'Local + DB'}
-              </span>
-            </div>
           </div>
 
-          {/* User logout */}
           <div className="pt-2 flex items-center justify-between border-t border-slate-800/60">
             <div className="min-w-0 pr-2">
               <div className="text-xs font-bold text-white truncate">{user?.full_name || 'Business Owner'}</div>
@@ -152,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
             <button
               onClick={logout}
               title="Sign Out"
-              className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+              className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>

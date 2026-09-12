@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { ToastContainer } from '../common/ToastContainer';
-import { PostEditorModal } from '../editor/PostEditorModal';
+import { EnhancedContentEditorModal } from '../editor/EnhancedContentEditorModal';
+import { AuthModal } from '../auth/AuthModal';
 import { useApp } from '../../context/AppContext';
 
 interface AppLayoutProps {
@@ -11,10 +12,10 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { editingPost, setEditingPost } = useApp();
+  const { editingPost, setEditingPost, updatePost } = useApp();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900">
+    <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row font-sans text-slate-100 selection:bg-indigo-500 selection:text-white">
       <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -25,11 +26,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       </div>
 
       <ToastContainer />
-
+      <AuthModal />
       {editingPost && (
-        <PostEditorModal
+        <EnhancedContentEditorModal
           post={editingPost}
           onClose={() => setEditingPost(null)}
+          onSave={(updated) => {
+            updatePost(updated.id, updated);
+            setEditingPost(null);
+          }}
         />
       )}
     </div>

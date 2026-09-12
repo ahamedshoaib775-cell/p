@@ -11,7 +11,7 @@ interface PostEditorModalProps {
 }
 
 export const PostEditorModal: React.FC<PostEditorModalProps> = ({ post, onClose }) => {
-  const { updatePost, business, mediaAssets, addToast } = useApp();
+  const { updatePost, business, mediaAssets, addToast, socialAccounts, isTestMode } = useApp();
 
   const [formData, setFormData] = useState<PostItem>({ ...post });
   const [previewPlatform, setPreviewPlatform] = useState<'instagram' | 'facebook'>('instagram');
@@ -85,7 +85,61 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({ post, onClose 
         <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
           {/* Left Form Editor */}
           <div className="lg:col-span-7 p-6 space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Account Selector & Status Banner */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100 border border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600">Status:</span>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-black uppercase ${
+                  formData.status.toLowerCase() === 'published' ? 'bg-emerald-100 text-emerald-800' :
+                  formData.status.toLowerCase() === 'failed' ? 'bg-rose-100 text-rose-800' :
+                  formData.status.toLowerCase() === 'publishing' ? 'bg-amber-100 text-amber-800 animate-pulse' :
+                  'bg-indigo-100 text-indigo-800'
+                }`}>
+                  {formData.status}
+                </span>
+              </div>
+
+              <span className={`text-[11px] font-black px-2.5 py-0.5 rounded ${
+                isTestMode ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+              }`}>
+                {isTestMode ? '🟡 TEST MODE' : '🟢 LIVE MODE'}
+              </span>
+            </div>
+
+            {formData.status.toLowerCase() === 'published' && formData.instagram_media_id && (
+              <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-mono">
+                ✅ <strong>Meta Instagram Media ID:</strong> {formData.instagram_media_id}
+              </div>
+            )}
+
+            {formData.status.toLowerCase() === 'failed' && formData.error_message && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-xs font-mono">
+                ❌ <strong>Failure Reason:</strong> {formData.error_message}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Publish To Account
+                </label>
+                <select
+                  value={formData.social_account_id || (socialAccounts[0]?.id || '')}
+                  onChange={e => setFormData({ ...formData, social_account_id: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {socialAccounts.length === 0 ? (
+                    <option value="">No connected accounts</option>
+                  ) : (
+                    socialAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.platform.toUpperCase()} — @{acc.username} ({acc.account_type})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Content Type
@@ -93,7 +147,7 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({ post, onClose 
                 <select
                   value={formData.content_type}
                   onChange={e => setFormData({ ...formData, content_type: e.target.value as ContentType })}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {contentTypes.map((t, idx) => (
                     <option key={idx} value={t}>{t}</option>
@@ -108,7 +162,7 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({ post, onClose 
                 <button
                   type="button"
                   onClick={() => setShowMediaPicker(!showMediaPicker)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center justify-between hover:bg-slate-100 transition-colors"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center justify-between hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <span className="truncate">{formData.media_url ? 'Media Selected' : 'Choose Media...'}</span>
                   <ImageIcon className="w-4 h-4 text-indigo-600" />

@@ -91,7 +91,9 @@ export const sampleSocialAccounts: SocialAccount[] = [
     platform: 'instagram',
     account_name: 'Artisan Bloom Coffee',
     account_handle: '@artisanbloomcoffee',
+    username: 'artisanbloomcoffee',
     is_connected: true,
+    status: 'connected',
     created_at: new Date().toISOString()
   },
   {
@@ -101,6 +103,7 @@ export const sampleSocialAccounts: SocialAccount[] = [
     account_name: 'Artisan Bloom Coffee Austin',
     account_handle: 'facebook.com/artisanbloomcoffee',
     is_connected: false,
+    status: 'disconnected',
     created_at: new Date().toISOString()
   }
 ];

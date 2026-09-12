@@ -1,4 +1,4 @@
-import type { PostItem } from '../types';
+import type { PostItem, SocialAccount } from '../types';
 
 export interface MetaConnectionState {
   appId: string;
@@ -34,164 +34,320 @@ export const saveMetaCredentials = (credentials: MetaConnectionState) => {
   localStorage.setItem(META_STORAGE_KEY, JSON.stringify(credentials));
 };
 
+export interface InstagramProfileData {
+  id: string;
+  username: string;
+  name?: string;
+  biography?: string;
+  profile_picture_url?: string;
+  followers_count?: number;
+  following_count?: number;
+  media_count?: number;
+}
+
 export interface MetaPublishResult {
   success: boolean;
   platform: 'instagram' | 'facebook';
-  metaPostId?: string;
-  isSimulated?: boolean;
+  instagram_media_id?: string;
+  meta_response?: any;
+  error_code?: string;
   error?: string;
 }
 
-export const validateMetaConnection = (creds: MetaConnectionState): { valid: boolean; reason?: string } => {
-  const token = creds.userAccessToken || import.meta.env.VITE_META_ACCESS_TOKEN;
-  if (!token) {
-    return {
-      valid: false,
-      reason: 'No live Meta Graph API Access Token configured. Operating in Demo/Simulation Mode (Posts will simulate successful dispatch).'
-    };
-  }
-  if (!creds.pageId && !creds.instagramBusinessAccountId && !import.meta.env.VITE_META_PAGE_ID && !import.meta.env.VITE_META_IG_ACCOUNT_ID) {
-    return {
-      valid: false,
-      reason: 'No connected Meta Facebook Page ID or Instagram Business Account ID found.'
-    };
-  }
-  return { valid: true };
+/**
+ * Mask sensitive tokens for security logging
+ */
+export const maskToken = (token: string): string => {
+  if (!token || token.length <= 8) return '****';
+  return `${token.substring(0, 4)}...${token.substring(token.length - 4)}`;
 };
 
-export const publishToMetaAccounts = async (post: PostItem): Promise<MetaPublishResult> => {
-  const creds = getMetaCredentials();
-
-  const accessToken = creds.userAccessToken || import.meta.env.VITE_META_ACCESS_TOKEN;
-  const igAccountId = creds.instagramBusinessAccountId || import.meta.env.VITE_META_IG_ACCOUNT_ID;
-  const pageId = creds.pageId || import.meta.env.VITE_META_PAGE_ID;
-
-  // Fallback to Demo / Simulated Publishing if no live token is present
-  if (!accessToken) {
-    await new Promise(resolve => setTimeout(resolve, 800)); // simulate network delay
+/**
+ * Fetch Instagram Professional Account details directly from Meta Graph API
+ */
+export const fetchInstagramProfile = async (
+  accessToken: string,
+  igAccountId: string
+): Promise<{ success: boolean; profile?: InstagramProfileData; error?: string }> => {
+  if (!accessToken || !igAccountId) {
     return {
-      success: true,
-      platform: 'instagram',
-      isSimulated: true,
-      metaPostId: `DEMO_IG_${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+      success: false,
+      error: 'Missing Meta Access Token or Instagram Business Account ID'
     };
   }
 
-  // Attempt real Meta Graph API call when token is provided
   try {
-    if (igAccountId) {
-      const fullCaption = `${post.headline}\n\n${post.caption}\n\n${post.hashtags.join(' ')}`;
+    const fields = 'id,username,name,biography,profile_picture_url,followers_count,follows_count,media_count';
+    const url = `https://graph.facebook.com/v19.0/${igAccountId}?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`;
+    
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.error) {
+      return {
+        success: false,
+        error: `Meta Graph API Error [${data.error.code}]: ${data.error.message}`
+      };
+    }
+
+    return {
+      success: true,
+      profile: {
+        id: data.id,
+        username: data.username,
+        name: data.name || data.username,
+        biography: data.biography || '',
+        profile_picture_url: data.profile_picture_url || '',
+        followers_count: data.followers_count || 0,
+        following_count: data.follows_count || 0,
+        media_count: data.media_count || 0
+      }
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `Network error verifying Instagram profile: ${err?.message || 'Check connection'}`
+    };
+  }
+};
+
+/**
+ * Strict Production Instagram & Facebook Publishing
+ * NEVER returns success: true unless Meta returns a real Instagram Media ID!
+ * Supports Single Image, Carousel, and Reel Publishing.
+ */
+export const publishToMetaAccounts = async (
+  post: PostItem,
+  socialAccount?: SocialAccount
+): Promise<MetaPublishResult> => {
+  const creds = getMetaCredentials();
+
+  const accessToken = socialAccount?.access_token || creds.userAccessToken || import.meta.env.VITE_META_ACCESS_TOKEN;
+  const igAccountId = socialAccount?.platform_account_id || socialAccount?.meta_account_id || creds.instagramBusinessAccountId || import.meta.env.VITE_META_IG_ACCOUNT_ID;
+  const pageId = creds.pageId || import.meta.env.VITE_META_PAGE_ID;
+
+  // STRICT REQUIREMENT: No token or account ID -> Fail explicitly
+  if (!accessToken) {
+    return {
+      success: false,
+      platform: 'instagram',
+      error_code: 'MISSING_ACCESS_TOKEN',
+      error: 'Publish Failed: Missing Meta Graph API Access Token. Please connect an Instagram Professional Account via Meta OAuth.'
+    };
+  }
+
+  if (!igAccountId && !pageId) {
+    return {
+      success: false,
+      platform: 'instagram',
+      error_code: 'MISSING_ACCOUNT_ID',
+      error: 'Publish Failed: Missing Instagram Professional Account ID or Facebook Page ID.'
+    };
+  }
+
+  // Attempt Instagram Publishing via Meta Graph API
+  if (igAccountId) {
+    try {
+      const fullCaption = `${post.headline}\n\n${post.caption}\n\n${(post.hashtags || []).join(' ')}`;
       const mediaUrl = post.media_url || 'https://images.unsplash.com/photo-1542744094-3a31b272c490';
+      const contentTypeLower = (post.content_type || '').toLowerCase();
+
+      const isCarousel = contentTypeLower.includes('carousel');
       const isVideoOrReel = (post.required_media_type && post.required_media_type.toLowerCase().includes('video')) || 
                             mediaUrl.match(/\.(mp4|mov|webm)(\?.*)?$/i) !== null || 
-                            post.content_type?.toLowerCase().includes('reel');
+                            contentTypeLower.includes('reel');
 
-      let containerEndpoint = `https://graph.facebook.com/v19.0/${igAccountId}/media`;
-      
-      let params = new URLSearchParams({
-        access_token: accessToken,
-        caption: fullCaption
-      });
+      let creationId = '';
 
-      if (isVideoOrReel) {
-        params.append('media_type', 'REELS');
-        params.append('video_url', mediaUrl);
-      } else {
-        params.append('image_url', mediaUrl);
-      }
+      if (isCarousel) {
+        // --- CAROUSEL PUBLISHING FLOW ---
+        // Step 1: Create child item containers (e.g. 2 media items)
+        const sampleCarouselUrls = [
+          mediaUrl,
+          'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80'
+        ];
 
-      // Step 1: Create Container on Instagram Graph API
-      const createRes = await fetch(`${containerEndpoint}?${params.toString()}`, { method: 'POST' });
-      const createData = await createRes.json();
+        const childContainerIds: string[] = [];
 
-      if (createData.error) {
-        return {
-          success: false,
-          platform: 'instagram',
-          error: `Meta Graph API Error [${createData.error.code}]: ${createData.error.message}`
-        };
-      }
+        for (const childUrl of sampleCarouselUrls) {
+          const childParams = new URLSearchParams({
+            access_token: accessToken,
+            is_carousel_item: 'true',
+            image_url: childUrl
+          });
 
-      const creationId = createData.id;
+          const childRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media?${childParams.toString()}`, { method: 'POST' });
+          const childData = await childRes.json();
 
-      // Step 2: For Videos/Reels, poll container status until FINISHED
-      if (isVideoOrReel) {
-        let isReady = false;
-        let attempts = 0;
-        while (!isReady && attempts < 10) {
-          await new Promise(r => setTimeout(r, 2000));
-          attempts++;
-          const statusRes = await fetch(`https://graph.facebook.com/v19.0/${creationId}?fields=status_code&access_token=${accessToken}`);
-          const statusData = await statusRes.json();
-          if (statusData.status_code === 'FINISHED') {
-            isReady = true;
-          } else if (statusData.status_code === 'ERROR') {
+          if (childData.error || !childData.id) {
             return {
               success: false,
               platform: 'instagram',
-              error: 'Instagram Reel processing error on Meta server.'
+              error_code: String(childData.error?.code || 'CAROUSEL_CHILD_FAIL'),
+              error: `Meta Carousel Child Container Error [${childData.error?.code}]: ${childData.error?.message}`
+            };
+          }
+          childContainerIds.push(childData.id);
+        }
+
+        // Step 2: Create parent carousel container
+        const carouselParams = new URLSearchParams({
+          access_token: accessToken,
+          media_type: 'CAROUSEL',
+          children: childContainerIds.join(','),
+          caption: fullCaption
+        });
+
+        const parentRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media?${carouselParams.toString()}`, { method: 'POST' });
+        const parentData = await parentRes.json();
+
+        if (parentData.error || !parentData.id) {
+          return {
+            success: false,
+            platform: 'instagram',
+            error_code: String(parentData.error?.code || 'CAROUSEL_PARENT_FAIL'),
+            error: `Meta Parent Carousel Container Error [${parentData.error?.code}]: ${parentData.error?.message}`
+          };
+        }
+
+        creationId = parentData.id;
+      } else {
+        // --- SINGLE IMAGE / REEL CONTAINER FLOW ---
+        const containerEndpoint = `https://graph.facebook.com/v19.0/${igAccountId}/media`;
+        
+        const params = new URLSearchParams({
+          access_token: accessToken,
+          caption: fullCaption
+        });
+
+        if (isVideoOrReel) {
+          params.append('media_type', 'REELS');
+          params.append('video_url', mediaUrl);
+        } else {
+          params.append('image_url', mediaUrl);
+        }
+
+        const createRes = await fetch(`${containerEndpoint}?${params.toString()}`, { method: 'POST' });
+        const createData = await createRes.json();
+
+        if (createData.error || !createData.id) {
+          return {
+            success: false,
+            platform: 'instagram',
+            error_code: String(createData.error?.code || 'CONTAINER_FAIL'),
+            error: `Meta Media Container Error [${createData.error?.code || 'NO_ID'}]: ${createData.error?.message || 'Failed to create Instagram media container'}`
+          };
+        }
+
+        creationId = createData.id;
+      }
+
+      // Step 2: For Videos/Reels, poll container status until FINISHED
+      if (isVideoOrReel && !isCarousel) {
+        let isReady = false;
+        let attempts = 0;
+        while (!isReady && attempts < 12) {
+          await new Promise(r => setTimeout(r, 2500));
+          attempts++;
+          const statusRes = await fetch(`https://graph.facebook.com/v19.0/${creationId}?fields=status_code,status&access_token=${encodeURIComponent(accessToken)}`);
+          const statusData = await statusRes.json();
+          
+          if (statusData.status_code === 'FINISHED') {
+            isReady = true;
+          } else if (statusData.status_code === 'ERROR' || statusData.error) {
+            return {
+              success: false,
+              platform: 'instagram',
+              error_code: 'REEL_ENCODING_ERROR',
+              error: `Instagram Reel Processing Error on Meta: ${statusData.error?.message || 'Video container status returned ERROR'}`
             };
           }
         }
+
+        if (!isReady) {
+          return {
+            success: false,
+            platform: 'instagram',
+            error_code: 'REEL_TIMEOUT',
+            error: 'Instagram Reel Processing Timeout: Video encoding did not finish on Meta server in time.'
+          };
+        }
       }
 
-      // Step 3: Publish Container
+      // Step 3: Call media_publish endpoint
       const publishRes = await fetch(
-        `https://graph.facebook.com/v19.0/${igAccountId}/media_publish?creation_id=${creationId}&access_token=${accessToken}`,
+        `https://graph.facebook.com/v19.0/${igAccountId}/media_publish?creation_id=${creationId}&access_token=${encodeURIComponent(accessToken)}`,
         { method: 'POST' }
       );
 
       const publishData = await publishRes.json();
 
-      if (publishData.error) {
+      // STRICT VALIDATION: Only succeed if publishData.id exists!
+      if (publishData.error || !publishData.id) {
         return {
           success: false,
           platform: 'instagram',
-          error: `Meta Graph API Publish Error: ${publishData.error.message}`
+          error_code: String(publishData.error?.code || 'PUBLISH_FAIL'),
+          error: `Meta /media_publish Error [${publishData.error?.code || 'NO_PUB_ID'}]: ${publishData.error?.message || 'Failed to publish Instagram media container'}`
         };
       }
 
+      // Successful Instagram publishing with real media ID!
       return {
         success: true,
         platform: 'instagram',
-        metaPostId: publishData.id
+        instagram_media_id: publishData.id,
+        meta_response: publishData
       };
-    } else if (pageId) {
-      // Publish to Facebook Page Feed
+    } catch (err: any) {
+      return {
+        success: false,
+        platform: 'instagram',
+        error_code: 'NETWORK_ERROR',
+        error: `Network Connection Error to Meta API: ${err?.message || 'CORS or Network issue'}`
+      };
+    }
+  }
+
+  // Attempt Facebook Page Publishing if pageId exists
+  if (pageId) {
+    try {
       const fbRes = await fetch(
-        `https://graph.facebook.com/v19.0/${pageId}/feed?message=${encodeURIComponent(post.caption)}&link=${encodeURIComponent(post.media_url || '')}&access_token=${accessToken}`,
+        `https://graph.facebook.com/v19.0/${pageId}/feed?message=${encodeURIComponent(post.caption)}&link=${encodeURIComponent(post.media_url || '')}&access_token=${encodeURIComponent(accessToken)}`,
         { method: 'POST' }
       );
 
       const fbData = await fbRes.json();
 
-      if (fbData.error) {
+      if (fbData.error || !fbData.id) {
         return {
           success: false,
           platform: 'facebook',
-          error: `Facebook Graph API Error: ${fbData.error.message}`
+          error_code: String(fbData.error?.code || 'FB_PUBLISH_FAIL'),
+          error: `Facebook Graph API Error [${fbData.error?.code || 'NO_ID'}]: ${fbData.error?.message || 'Failed to publish to Facebook Page'}`
         };
       }
 
       return {
         success: true,
         platform: 'facebook',
-        metaPostId: fbData.id
+        instagram_media_id: fbData.id,
+        meta_response: fbData
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        platform: 'facebook',
+        error_code: 'FB_NETWORK_ERROR',
+        error: `Facebook Network Error: ${err?.message}`
       };
     }
-  } catch (err: any) {
-    return {
-      success: false,
-      platform: 'instagram',
-      error: `Network connection to Meta Graph API failed: ${err?.message || 'Check connection or CORS configuration'}`
-    };
   }
 
-  // Final fallback to simulation if account IDs were missing
   return {
-    success: true,
+    success: false,
     platform: 'instagram',
-    isSimulated: true,
-    metaPostId: `DEMO_IG_${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+    error_code: 'NO_ACCOUNT_CONFIGURED',
+    error: 'Publish Failed: No valid Instagram Business Account ID or Facebook Page ID.'
   };
 };
